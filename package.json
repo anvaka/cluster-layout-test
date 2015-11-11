@@ -1,0 +1,32 @@
+{
+  "name": "cluster-layout-test",
+  "version": "1.0.0",
+  "description": "trying to combine ngraph.cw and force layout",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anvaka/cluster-layout-test.git"
+  },
+  "keywords": [
+    "experiment"
+  ],
+  "author": "Andrei Kashcha",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/anvaka/cluster-layout-test/issues"
+  },
+  "homepage": "https://github.com/anvaka/cluster-layout-test#readme",
+  "devDependencies": {
+    "miserables": "^1.0.0",
+    "ngraph.svg": "0.0.15"
+  },
+  "dependencies": {
+    "ngraph.cw": "^1.1.0",
+    "ngraph.forcelayout": "0.0.22",
+    "ngraph.graph": "0.0.12",
+    "sigma": "^1.0.3"
+  }
+}
