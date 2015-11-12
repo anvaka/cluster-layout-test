@@ -26,7 +26,6 @@
   "dependencies": {
     "ngraph.cw": "^1.1.0",
     "ngraph.forcelayout": "0.0.22",
-    "ngraph.graph": "0.0.12",
-    "sigma": "^1.0.3"
+    "ngraph.graph": "0.0.12"
   }
 }
