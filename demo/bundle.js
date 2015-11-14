@@ -24,6 +24,7 @@ function getColor(id) {
 module.exports = getColor;
 
 },{}],2:[function(require,module,exports){
+/* globals cola, sigma */
 var getColor = require('./getColor.js');
 var createLayout = require('ngraph.forcelayout');
 
@@ -37,63 +38,75 @@ for (var i = 0; i < 3; ++i) {
 }
 var clusterGraph = require('./produceClusterGraph.js')(srcGraph, whisper);
 
-// first, we perform layout on the cluster graph:
-var clusterLayout = createLayout(clusterGraph, {
-  springLength: 400,
-  springCoeff: 0.00055,
-  dragCoeff: 0.09,
-  gravity: -1
-});
+var localLayouts = {};
+whisper.forEachCluster(makeLocalLayout);
 
-clusterGraph.forEachNode(function(node) {
-  var body = clusterLayout.getBody(node.id);
-  // `data` represents array of nodes within this cluster. We will assume
-  // that the mass of the cluster node is growing as fast as clusterSize^2;
-  body.mass = node.data.length * node.data.length;
-});
+var clusterLayout = new cola.Layout();
+var clusterNodes = getAllNodes(clusterGraph).map(toColaNode);
 
-for (var i = 0; i < 250; ++i) {
-  clusterLayout.step();
+clusterLayout.avoidOverlaps(true)
+  .nodes(clusterNodes)
+  .links(getAllLinks(clusterNodes, clusterGraph))
+  .linkDistance(200)
+  .size([1960, 1500])
+  .start(0, 0, 60);
+
+var clusterPosLookup = {};
+for (var i = 0; i < clusterNodes.length; ++i) {
+  clusterPosLookup[clusterNodes[i].name] =  clusterNodes[i].bounds;
 }
 
-// Now that we have global clusters, let's perform local layouts:
-whisper.forEachCluster(makeLocalLayout);
+whisper.forEachCluster(makeGlobalLayout);
 
 renderGraph();
 
+function makeGlobalLayout(cluster) {
+  var meta = localLayouts[cluster.class];
+  var clusterPos = clusterPosLookup[cluster.class];
+  var nodes = meta.nodes;
+  var localLayout = meta.layout;
+
+  for (var i = 0; i < nodes.length; ++i) {
+    setGlobalPos(nodes[i]);
+  }
+
+  function setGlobalPos(node) {
+    var localPos = localLayout.getNodePosition(node);
+    globalPos.set(node, {
+      x: (localPos.x - meta.minX) + clusterPos.x,
+      y: (localPos.y - meta.minY) + clusterPos.y
+    });
+  }
+}
 function makeLocalLayout(cluster) {
   var nodes = cluster.nodes;
   var subGraph = makeSubgraph(nodes, srcGraph);
-  var clusterPos = clusterLayout.getNodePosition(cluster.class);
 
   var localLayout = createLayout(subGraph, {
-    springLength: 60,
+    springLength: 20,
     springCoeff: 0.00055,
     dragCoeff: 0.09,
     gravity: -1
   });
+
   for (var i = 0; i < 150; ++i) {
     localLayout.step();
   }
+
   var minX = Number.POSITIVE_INFINITY,
     minY = Number.POSITIVE_INFINITY;
   var maxX = Number.NEGATIVE_INFINITY,
     maxY = Number.NEGATIVE_INFINITY;
   nodes.forEach(findMinPos);
-  var boxSize = Math.max( nodes.length * nodes.length, 200);
 
-  var ratioX = boxSize/(maxX - minX);
-  var ratioY = boxSize/(maxY - minY);
-
-  nodes.forEach(setGlobalPos);
-
-  function setGlobalPos(node) {
-    var localPos = localLayout.getNodePosition(node);
-    globalPos.set(node, {
-      x: (localPos.x - minX) * ratioX + clusterPos.x,
-      y: (localPos.y - minY) * ratioY + clusterPos.y
-    });
-  }
+  localLayouts[cluster.class] = {
+    minX: minX - 10,
+    minY: minY - 10,
+    maxX: maxX + 10,
+    maxY: maxY + 10,
+    layout: localLayout,
+    nodes: cluster.nodes
+  };
 
   function findMinPos(node) {
     var pos = localLayout.getNodePosition(node);
@@ -164,6 +177,46 @@ function renderGraph() {
     graph: sigmaGraph,
   });
 }
+
+function getAllNodes(graph) {
+  var nodes = [];
+  graph.forEachNode(function(node) {
+    nodes.push(node);
+  });
+  return nodes;
+}
+
+function getAllLinks(nodes, graph) {
+  var links = [];
+  var lookup = new Map();
+  for (var i = 0; i < nodes.length; ++i) {
+    lookup.set(nodes[i].name, i);
+  }
+  graph.forEachLink(function(l) {
+    links.push({
+      source: lookup.get(l.fromId),
+      target: lookup.get(l.toId)
+    });
+  });
+  return links;
+}
+
+function toColaNode(ngraphNode) {
+  var meta = localLayouts[ngraphNode.id];
+  return {
+    width: meta.maxX - meta.minX,
+    name: ngraphNode.id,
+    height: meta.maxY - meta.minY
+  };
+}
+
+function toColaLink(ngraphLink) {
+  return {
+    source: ngraphLink.fromId,
+    target: ngraphLink.toId
+  };
+}
+
 
 },{"./getColor.js":1,"./produceClusterGraph.js":3,"miserables":5,"ngraph.cw":6,"ngraph.forcelayout":9,"ngraph.graph":10}],3:[function(require,module,exports){
 var createGraph = require('ngraph.graph');

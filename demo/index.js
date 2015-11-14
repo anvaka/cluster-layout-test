@@ -12,34 +12,49 @@ for (var i = 0; i < 3; ++i) {
 }
 var clusterGraph = require('./produceClusterGraph.js')(srcGraph, whisper);
 
-// first, we perform layout on the cluster graph:
+var localLayouts = {};
+whisper.forEachCluster(makeLocalLayout);
+
 var clusterLayout = new cola.Layout();
 var clusterNodes = getAllNodes(clusterGraph).map(toColaNode);
+
 clusterLayout.avoidOverlaps(true)
   .nodes(clusterNodes)
   .links(getAllLinks(clusterNodes, clusterGraph))
-  .linkDistance(120)
-  .size([960, 500])
+  .linkDistance(200)
+  .size([1960, 1500])
   .start(0, 0, 60);
-
-// Now that we have global clusters, let's perform local layouts:
 
 var clusterPosLookup = {};
 for (var i = 0; i < clusterNodes.length; ++i) {
-  clusterPosLookup[clusterNodes[i].name] = {
-    x: clusterNodes[i].x,
-    y: clusterNodes[i].y,
-    size: clusterNodes[i].width
-  };
+  clusterPosLookup[clusterNodes[i].name] =  clusterNodes[i].bounds;
 }
-whisper.forEachCluster(makeLocalLayout);
+
+whisper.forEachCluster(makeGlobalLayout);
 
 renderGraph();
 
+function makeGlobalLayout(cluster) {
+  var meta = localLayouts[cluster.class];
+  var clusterPos = clusterPosLookup[cluster.class];
+  var nodes = meta.nodes;
+  var localLayout = meta.layout;
+
+  for (var i = 0; i < nodes.length; ++i) {
+    setGlobalPos(nodes[i]);
+  }
+
+  function setGlobalPos(node) {
+    var localPos = localLayout.getNodePosition(node);
+    globalPos.set(node, {
+      x: (localPos.x - meta.minX) + clusterPos.x,
+      y: (localPos.y - meta.minY) + clusterPos.y
+    });
+  }
+}
 function makeLocalLayout(cluster) {
   var nodes = cluster.nodes;
   var subGraph = makeSubgraph(nodes, srcGraph);
-  var clusterPos = clusterPosLookup[cluster.class];
 
   var localLayout = createLayout(subGraph, {
     springLength: 20,
@@ -47,28 +62,25 @@ function makeLocalLayout(cluster) {
     dragCoeff: 0.09,
     gravity: -1
   });
+
   for (var i = 0; i < 150; ++i) {
     localLayout.step();
   }
+
   var minX = Number.POSITIVE_INFINITY,
     minY = Number.POSITIVE_INFINITY;
   var maxX = Number.NEGATIVE_INFINITY,
     maxY = Number.NEGATIVE_INFINITY;
   nodes.forEach(findMinPos);
 
-  var boxSize = clusterPos.size;
-  var ratioX = boxSize/(maxX - minX);
-  var ratioY = boxSize/(maxY - minY);
-
-  nodes.forEach(setGlobalPos);
-
-  function setGlobalPos(node) {
-    var localPos = localLayout.getNodePosition(node);
-    globalPos.set(node, {
-      x: (localPos.x - minX) * ratioX + clusterPos.x,
-      y: (localPos.y - minY) * ratioY + clusterPos.y
-    });
-  }
+  localLayouts[cluster.class] = {
+    minX: minX - 10,
+    minY: minY - 10,
+    maxX: maxX + 10,
+    maxY: maxY + 10,
+    layout: localLayout,
+    nodes: cluster.nodes
+  };
 
   function findMinPos(node) {
     var pos = localLayout.getNodePosition(node);
@@ -164,11 +176,11 @@ function getAllLinks(nodes, graph) {
 }
 
 function toColaNode(ngraphNode) {
-  var size = ngraphNode.data.length * 5;
+  var meta = localLayouts[ngraphNode.id];
   return {
-    width: size,
+    width: meta.maxX - meta.minX,
     name: ngraphNode.id,
-    height: size
+    height: meta.maxY - meta.minY
   };
 }
 
